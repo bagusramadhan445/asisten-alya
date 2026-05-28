@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Glow circle background -->
+    <path
+        android:fillColor="#4400BFFF"
+        android:pathData="M54,54m-40,0a40,40 0,1 1,80 0a40,40 0,1 1,-80 0"/>
+
+    <path
+        android:fillColor="#66FF69B4"
+        android:pathData="M54,54m-30,0a30,30 0,1 1,60 0a30,30 0,1 1,-60 0"/>
+
+    <!-- Letter A -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M38,72 L46,36 L50,36 L58,72 L54,72 L52,64 L44,64 L42,72 Z M45,60 L51,60 L48,44 Z"
+        android:strokeWidth="0"/>
+
+    <!-- Letter A (second) -->
+    <path
+        android:fillColor="#FFB6C1"
+        android:pathData="M52,72 L60,36 L64,36 L72,72 L68,72 L66,64 L58,64 L56,72 Z M59,60 L65,60 L62,44 Z"
+        android:strokeWidth="0"/>
+</vector>
