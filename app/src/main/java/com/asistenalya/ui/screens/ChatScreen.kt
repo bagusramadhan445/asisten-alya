@@ -5,6 +5,9 @@ import android.content.pm.PackageManager
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +32,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Send
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -40,10 +44,8 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,14 +53,14 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
-import com.asistenalya.data.repository.AIRepository
-import com.asistenalya.domain.model.AssistantState
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.asistenalya.domain.model.ChatMessage
-import com.asistenalya.manager.AssistantStateManager
 import com.asistenalya.manager.SpeechManager
+import com.asistenalya.ui.components.GlowingOrb
 import com.asistenalya.ui.components.TypingIndicator
 import com.asistenalya.ui.theme.BlueGlow
 import com.asistenalya.ui.theme.LightWhite
@@ -68,21 +70,22 @@ import com.asistenalya.ui.theme.NavyMedium
 import com.asistenalya.ui.theme.PurplePastel
 import com.asistenalya.ui.theme.SakuraPink
 import com.asistenalya.ui.theme.SubtleGray
-import com.asistenalya.utils.SecurePrefs
-import kotlinx.coroutines.launch
+import com.asistenalya.domain.model.AssistantState
+import com.asistenalya.manager.AssistantStateManager
 
 @Composable
-fun ChatScreen(onBack: () -> Unit) {
+fun ChatScreen(
+    onBack: () -> Unit,
+    viewModel: ChatViewModel = viewModel()
+) {
     val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val aiRepository = remember { AIRepository() }
     val speechManager = remember { SpeechManager(context) }
     val listState = rememberLazyListState()
 
-    val messages = remember { mutableStateListOf<ChatMessage>() }
-    var inputText by remember { mutableStateOf("") }
-    var isTyping by remember { mutableStateOf(false) }
+    val messages by viewModel.messages.collectAsState()
+    val isTyping by viewModel.isTyping.collectAsState()
     val assistantState by AssistantStateManager.state.collectAsState()
+    var inputText by remember { mutableStateOf("") }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestPermission()
@@ -100,36 +103,6 @@ fun ChatScreen(onBack: () -> Unit) {
         }
         onDispose {
             speechManager.destroy()
-        }
-    }
-
-    fun sendMessage(text: String) {
-        if (text.isBlank()) return
-        val userMessage = ChatMessage(content = text, isUser = true)
-        messages.add(userMessage)
-        inputText = ""
-        isTyping = true
-        AssistantStateManager.updateState(AssistantState.THINKING)
-
-        scope.launch {
-            listState.animateScrollToItem(messages.size - 1)
-            val apiKey = SecurePrefs.getApiKey(context)
-            if (apiKey.isEmpty()) {
-                messages.add(ChatMessage(content = "API key belum diatur.", isUser = false))
-                isTyping = false
-                AssistantStateManager.updateState(AssistantState.READY)
-                return@launch
-            }
-            when (val result = aiRepository.sendMessage(apiKey, text)) {
-                is AIRepository.AIResult.Success -> {
-                    messages.add(ChatMessage(content = result.text, isUser = false))
-                }
-                is AIRepository.AIResult.Error -> {
-                    messages.add(ChatMessage(content = "Error: ${result.message}", isUser = false))
-                }
-            }
-            isTyping = false
-            AssistantStateManager.updateState(AssistantState.READY)
         }
     }
 
@@ -163,26 +136,59 @@ fun ChatScreen(onBack: () -> Unit) {
                 "Chat dengan Alya",
                 fontWeight = FontWeight.Bold,
                 fontSize = 20.sp,
-                color = SakuraPink
+                color = SakuraPink,
+                modifier = Modifier.weight(1f)
             )
+            IconButton(onClick = { viewModel.clearChat() }) {
+                Icon(Icons.Default.DeleteOutline, contentDescription = "Clear", tint = SubtleGray)
+            }
         }
 
-        // Messages
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp),
-            contentPadding = PaddingValues(vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(messages) { message ->
-                ChatBubble(message)
+        // Empty state
+        if (messages.isEmpty() && !isTyping) {
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    GlowingOrb(
+                        state = AssistantState.READY,
+                        size = 100.dp
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Halo! Aku Alya.\nAda yang bisa aku bantu?",
+                        color = SubtleGray,
+                        fontSize = 16.sp,
+                        textAlign = TextAlign.Center
+                    )
+                }
             }
-            if (isTyping) {
-                item {
-                    TypingIndicator(modifier = Modifier.padding(start = 8.dp))
+        } else {
+            // Messages
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp),
+                contentPadding = PaddingValues(vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(messages, key = { it.id }) { message ->
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn() + slideInVertically { it / 2 }
+                    ) {
+                        ChatBubble(message)
+                    }
+                }
+                if (isTyping) {
+                    item {
+                        TypingIndicator(modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
             }
         }
@@ -244,7 +250,10 @@ fun ChatScreen(onBack: () -> Unit) {
                             colors = listOf(SakuraPink, PurplePastel)
                         )
                     )
-                    .clickable { sendMessage(inputText) },
+                    .clickable {
+                        viewModel.sendMessage(inputText)
+                        inputText = ""
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = LightWhite, modifier = Modifier.size(20.dp))
@@ -256,37 +265,51 @@ fun ChatScreen(onBack: () -> Unit) {
 @Composable
 private fun ChatBubble(message: ChatMessage) {
     val isUser = message.isUser
+    val timeString = remember(message.timestamp) {
+        val sdf = java.text.SimpleDateFormat("HH:mm", java.util.Locale.getDefault())
+        sdf.format(java.util.Date(message.timestamp))
+    }
 
     Box(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = if (isUser) Alignment.CenterEnd else Alignment.CenterStart
     ) {
-        Box(
-            modifier = Modifier
-                .widthIn(max = 300.dp)
-                .background(
-                    if (isUser) {
-                        Brush.linearGradient(
-                            colors = listOf(SakuraPink.copy(alpha = 0.8f), PurplePastel.copy(alpha = 0.6f))
-                        )
-                    } else {
-                        Brush.linearGradient(
-                            colors = listOf(NavyCard, BlueGlow.copy(alpha = 0.15f))
-                        )
-                    },
-                    shape = RoundedCornerShape(
-                        topStart = 16.dp,
-                        topEnd = 16.dp,
-                        bottomStart = if (isUser) 16.dp else 4.dp,
-                        bottomEnd = if (isUser) 4.dp else 16.dp
-                    )
-                )
-                .padding(12.dp)
+        Column(
+            horizontalAlignment = if (isUser) Alignment.End else Alignment.Start
         ) {
+            Box(
+                modifier = Modifier
+                    .widthIn(max = 300.dp)
+                    .background(
+                        if (isUser) {
+                            Brush.linearGradient(
+                                colors = listOf(SakuraPink.copy(alpha = 0.8f), PurplePastel.copy(alpha = 0.6f))
+                            )
+                        } else {
+                            Brush.linearGradient(
+                                colors = listOf(NavyCard, BlueGlow.copy(alpha = 0.15f))
+                            )
+                        },
+                        shape = RoundedCornerShape(
+                            topStart = 16.dp,
+                            topEnd = 16.dp,
+                            bottomStart = if (isUser) 16.dp else 4.dp,
+                            bottomEnd = if (isUser) 4.dp else 16.dp
+                        )
+                    )
+                    .padding(12.dp)
+            ) {
+                Text(
+                    text = message.content,
+                    color = LightWhite,
+                    fontSize = 14.sp
+                )
+            }
             Text(
-                text = message.content,
-                color = LightWhite,
-                fontSize = 14.sp
+                text = timeString,
+                color = SubtleGray,
+                fontSize = 10.sp,
+                modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
             )
         }
     }

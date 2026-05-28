@@ -20,3 +20,14 @@
 # OkHttp
 -dontwarn okhttp3.**
 -dontwarn okio.**
+
+# Room
+-keep class * extends androidx.room.RoomDatabase
+-dontwarn androidx.room.paging.**
+
+# EncryptedSharedPreferences
+-keep class androidx.security.crypto.** { *; }
+
+# Kotlin Coroutines
+-keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
+-keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
